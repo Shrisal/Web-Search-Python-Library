@@ -16,25 +16,19 @@ class TestGoogleSearch(unittest.TestCase):
             self.mock_html = f.read()
 
     def test_parsing_logic(self):
-        """Test that the internal parser correctly extracts data from HTML."""
+        """Test that the internal parser correctly extracts data from HTML (gbv=1 style)."""
         results = _parse_results(self.mock_html)
 
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 2)
 
         # Check first result (Standard)
         self.assertEqual(results[0]['title'], "Welcome to Python.org")
         self.assertEqual(results[0]['link'], "https://www.python.org/")
         self.assertIn("official home of the Python", results[0]['snippet'])
 
-        # Check second result (No snippet)
+        # Check second result
         self.assertEqual(results[1]['title'], "Python (programming language) - Wikipedia")
         self.assertEqual(results[1]['link'], "https://en.wikipedia.org/wiki/Python_(programming_language)")
-        self.assertEqual(results[1]['snippet'], "")
-
-        # Check third result (Alternative snippet class)
-        self.assertEqual(results[2]['title'], "Python Tutorial - W3Schools")
-        self.assertEqual(results[2]['link'], "https://www.w3schools.com/python/")
-        self.assertIn("popular programming language", results[2]['snippet'])
 
     @patch('google_search_lib.search.requests.Session')
     def test_google_search_success(self, mock_session_cls):
@@ -44,24 +38,19 @@ class TestGoogleSearch(unittest.TestCase):
         mock_session_instance.cookies = {}
         mock_session_cls.return_value = mock_session_instance
 
-        # Responses: Homepage + Search
-        homepage_resp = Mock()
-        homepage_resp.status_code = 200
-
-        search_resp = Mock()
-        search_resp.status_code = 200
-        search_resp.text = self.mock_html
+        homepage_resp = Mock(status_code=200)
+        search_resp = Mock(status_code=200, text=self.mock_html)
 
         mock_session_instance.get.side_effect = [homepage_resp, search_resp]
 
-        results = google_search("test query", num_results=3)
+        results = google_search("test query", num_results=2)
 
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 2)
         self.assertEqual(results[0]['title'], "Welcome to Python.org")
 
     @patch('google_search_lib.search.requests.Session')
     def test_google_search_pagination(self, mock_session_cls):
-        """Test that pagination works."""
+        """Test that pagination works (gbv=1 style)."""
         mock_session_instance = Mock()
         mock_session_instance.headers = {}
         mock_session_instance.cookies = {}
@@ -69,15 +58,15 @@ class TestGoogleSearch(unittest.TestCase):
 
         page1_html = """
         <html><body>
-            <div class="g"><h3>Title 1</h3><a href="link1"></a><div class="VwiC3b">Snippet 1</div></div>
-            <div class="g"><h3>Title 2</h3><a href="link2"></a><div class="VwiC3b">Snippet 2</div></div>
+            <div class="g"><h3><a href="/url?q=link1">Title 1</a></h3><div class="s">Snippet 1</div></div>
+            <div class="g"><h3><a href="/url?q=link2">Title 2</a></h3><div class="s">Snippet 2</div></div>
         </body></html>
         """
 
         page2_html = """
         <html><body>
-            <div class="g"><h3>Title 3</h3><a href="link3"></a><div class="VwiC3b">Snippet 3</div></div>
-            <div class="g"><h3>Title 4</h3><a href="link4"></a><div class="VwiC3b">Snippet 4</div></div>
+            <div class="g"><h3><a href="/url?q=link3">Title 3</a></h3><div class="s">Snippet 3</div></div>
+            <div class="g"><h3><a href="/url?q=link4">Title 4</a></h3><div class="s">Snippet 4</div></div>
         </body></html>
         """
 
@@ -101,11 +90,9 @@ class TestGoogleSearch(unittest.TestCase):
         mock_session_instance.cookies = {}
         mock_session_cls.return_value = mock_session_instance
 
-        # Homepage ok, then 429 forever
         homepage_resp = Mock(status_code=200)
         bad_resp = Mock(status_code=429)
 
-        # return homepage once, then bad_resp repeatedly
         mock_session_instance.get.side_effect = [homepage_resp] + [bad_resp]*10
 
         results = google_search("test", num_results=5)
