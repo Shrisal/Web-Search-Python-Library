@@ -1,6 +1,6 @@
-# Google Search Library
+# Mini Search Engine
 
-A robust, lightweight Python library to perform Google searches without using the official API.
+A lightweight Python library to **Build Your Own Search Engine**. It includes a web crawler, an inverted indexer, and a ranking algorithm based on **PageRank** to find and rank relevant links.
 
 ## Installation
 
@@ -10,48 +10,48 @@ pip install .
 
 ## Usage
 
+This library allows you to crawl a set of websites, build an index in memory, and search through them with relevance sorting.
+
 ```python
-from google_search_lib import google_search
+from mini_search_engine import SearchEngine
 
-# Basic search
-results = google_search("python programming", num_results=5)
+# 1. Initialize the engine
+engine = SearchEngine()
 
-for result in results:
-    print(f"Title: {result['title']}")
-    print(f"Link: {result['link']}")
-    print(f"Snippet: {result['snippet']}")
-    print("-" * 20)
-
-# Using Proxies and Retries
-proxies = {
-    "http": "http://user:pass@10.10.1.10:3128",
-    "https": "http://user:pass@10.10.1.10:1080",
-}
-
-results = google_search(
-    "web scraping",
-    num_results=20,
-    proxies=proxies,
-    retry_count=5
+# 2. Build the database (Crawl -> Index -> Rank)
+# This may take time depending on max_pages
+print("Crawling and building index...")
+engine.build_db(
+    start_urls=["https://www.python.org/"],
+    max_pages=20
 )
+
+# 3. Search
+print("\n--- Search Results for 'documentation' ---")
+results = engine.search("documentation")
+
+for i, res in enumerate(results):
+    print(f"#{i+1} [Score: {res['score']:.4f}] {res['title']}")
+    print(f"Link: {res['link']}")
+    print("-" * 20)
 ```
 
-## Features
+## How It Works
 
-- **No API Key Required**: Scrapes Google search results directly.
-- **Robust Session Handling**: Uses a session to manage cookies and headers, mimicking a real browser to avoid detection.
-- **Anti-Scraping Measures**:
-    - Randomizes `User-Agent` and other headers.
-    - Adds polite delays between requests.
-    - Visits the homepage first to establish session cookies.
-- **Proxy Support**: Full support for HTTP/HTTPS proxies.
-- **Retry Logic**: Built-in exponential backoff for handling `429 Too Many Requests` or network errors.
+1.  **Crawler**: Fetches pages using `requests` and `BeautifulSoup`. It follows links (BFS) up to `max_pages`.
+2.  **Indexer**: tokenizes content and builds an **Inverted Index** mapping keywords to documents.
+3.  **Ranker**:
+    *   Constructs a link graph from the crawled data.
+    *   Computes **PageRank** scores (iterative power method) to determine authority.
+4.  **Search**:
+    *   Finds documents containing all query terms (AND search).
+    *   Ranks them by their pre-computed PageRank score.
 
-## Limitations & Disclaimer
+## Limitations
 
-- **Rate Limiting**: Google aggressively blocks automated requests. While this library is designed to be robust (handling retries and sessions), you may still encounter blocks (CAPTHCAs) if making excessive requests from a single IP.
-- **IP Blocking**: Cloud data center IPs (AWS, GCP, etc.) are often flagged by Google. For best results, use residential proxies or a local machine.
-- **Structure Changes**: Google frequently changes its HTML structure. This library uses standard selectors that work for most desktop results, but it may break if the layout changes significantly.
+- **In-Memory**: All data is stored in memory. Not suitable for crawling thousands of pages without modification.
+- **Simple Tokenization**: Does not handle stemming (e.g., "running" vs "run") or complex NLP.
+- **Politeness**: Includes basic delays, but aggressive crawling may get you blocked by target sites.
 
 ## License
 

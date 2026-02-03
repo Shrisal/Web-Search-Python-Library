@@ -1,14 +1,15 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="google_search_lib",
+    name="mini_search_engine",
     version="0.1.0",
-    description="A lightweight Google search library without API.",
+    description="A simple search engine library with Crawling, Indexing, and PageRank.",
     author="Jules",
     packages=find_packages(),
     install_requires=[
-        "requests>=2.0.0",
-        "beautifulsoup4>=4.0.0",
+        "requests",
+        "beautifulsoup4",
+        "numpy"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
