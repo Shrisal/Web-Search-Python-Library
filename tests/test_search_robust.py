@@ -28,6 +28,7 @@ class TestGoogleSearchRobustness(unittest.TestCase):
         mock_session_instance = Mock()
         mock_session_instance.proxies = {} # simulate proxies dict
         mock_session_instance.headers = {}
+        mock_session_instance.cookies = Mock() # Updated to Mock
         mock_session_cls.return_value = mock_session_instance
 
         # Setup mock return for ensure_cookies (get homepage) and search (get search)
@@ -50,7 +51,8 @@ class TestGoogleSearchRobustness(unittest.TestCase):
         """Test that it retries on failure and eventually succeeds."""
         mock_session_instance = Mock()
         mock_session_instance.headers = {}
-        mock_session_instance.cookies = {}
+        mock_session_instance.cookies = Mock() # Updated to Mock
+        mock_session_instance.cookies.get.return_value = None
         mock_session_cls.return_value = mock_session_instance
 
         # Responses:

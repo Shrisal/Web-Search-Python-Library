@@ -35,7 +35,10 @@ class TestGoogleSearch(unittest.TestCase):
         """Test the main function with mocked requests."""
         mock_session_instance = Mock()
         mock_session_instance.headers = {}
-        mock_session_instance.cookies = {}
+        # cookies needs to be a Mock with .set() and .get()
+        mock_session_instance.cookies = Mock()
+        mock_session_instance.cookies.get.return_value = None # simulate no cookies initially
+
         mock_session_cls.return_value = mock_session_instance
 
         homepage_resp = Mock(status_code=200)
@@ -53,7 +56,8 @@ class TestGoogleSearch(unittest.TestCase):
         """Test that pagination works (gbv=1 style)."""
         mock_session_instance = Mock()
         mock_session_instance.headers = {}
-        mock_session_instance.cookies = {}
+        mock_session_instance.cookies = Mock()
+        mock_session_instance.cookies.get.return_value = None
         mock_session_cls.return_value = mock_session_instance
 
         page1_html = """
@@ -87,7 +91,8 @@ class TestGoogleSearch(unittest.TestCase):
         """Test handling of 429 Too Many Requests."""
         mock_session_instance = Mock()
         mock_session_instance.headers = {}
-        mock_session_instance.cookies = {}
+        mock_session_instance.cookies = Mock()
+        mock_session_instance.cookies.get.return_value = None
         mock_session_cls.return_value = mock_session_instance
 
         homepage_resp = Mock(status_code=200)
