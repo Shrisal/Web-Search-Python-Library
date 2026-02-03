@@ -1,6 +1,8 @@
 # Mini Search Engine
 
-A lightweight Python library to **Build Your Own Search Engine**. It includes a web crawler, an inverted indexer, and a ranking algorithm based on **PageRank** to find and rank relevant links.
+A lightweight, beginner-friendly Python library that lets you build your own search engine from scratch.
+
+It includes a **Parallel Web Crawler**, a **Search Indexer**, and a **Ranking Algorithm** (PageRank) to find and sort the most relevant websites.
 
 ## Installation
 
@@ -8,9 +10,9 @@ A lightweight Python library to **Build Your Own Search Engine**. It includes a 
 pip install .
 ```
 
-## Usage
+## Quick Start
 
-This library allows you to crawl a set of websites, build an index in memory, and search through them with relevance sorting.
+You can build a search engine in just 3 lines of code! By default, it starts crawling from a list of popular, high-quality websites (Wikipedia, Python.org, GitHub, etc.).
 
 ```python
 from mini_search_engine import SearchEngine
@@ -18,40 +20,59 @@ from mini_search_engine import SearchEngine
 # 1. Initialize the engine
 engine = SearchEngine()
 
-# 2. Build the database (Crawl -> Index -> Rank)
-# This may take time depending on max_pages
-print("Crawling and building index...")
-engine.build_db(
-    start_urls=["https://www.python.org/"],
-    max_pages=20
-)
+# 2. Build the database
+# This will start crawling the web from default seeds in parallel.
+# It fetches 20 pages to create a small network.
+print("Crawling the web... please wait.")
+engine.build_db(max_pages=20)
 
-# 3. Search
-print("\n--- Search Results for 'documentation' ---")
-results = engine.search("documentation")
+# 3. Search!
+query = "python"
+print(f"\nSearching for: '{query}'")
+results = engine.search(query)
 
+# Display results
 for i, res in enumerate(results):
     print(f"#{i+1} [Score: {res['score']:.4f}] {res['title']}")
     print(f"Link: {res['link']}")
-    print("-" * 20)
+    print("-" * 30)
 ```
 
-## How It Works
+## How It Works (Simplified)
 
-1.  **Crawler**: Fetches pages using `requests` and `BeautifulSoup`. It follows links (BFS) up to `max_pages`.
-2.  **Indexer**: tokenizes content and builds an **Inverted Index** mapping keywords to documents.
-3.  **Ranker**:
-    *   Constructs a link graph from the crawled data.
-    *   Computes **PageRank** scores (iterative power method) to determine authority.
-4.  **Search**:
-    *   Finds documents containing all query terms (AND search).
-    *   Ranks them by their pre-computed PageRank score.
+### 1. The Crawler (The "Spider")
+Imagine sending out 5 little robots (threads) to different websites. They read the page, save the text, and find all the links to other pages. They add those new links to a queue, and the robots go visit them next. This continues until they have visited `max_pages`.
 
-## Limitations
+### 2. The Indexer (The "Book")
+Once the robots return, the Indexer reads all the text. It creates a massive list (like the index at the back of a textbook) that maps every word to the pages it appears on.
+*   "Apple" -> [Page 1, Page 5]
+*   "Banana" -> [Page 2]
 
-- **In-Memory**: All data is stored in memory. Not suitable for crawling thousands of pages without modification.
-- **Simple Tokenization**: Does not handle stemming (e.g., "running" vs "run") or complex NLP.
-- **Politeness**: Includes basic delays, but aggressive crawling may get you blocked by target sites.
+### 3. The Ranker (The "Judge")
+Not all pages are equal. The Ranker uses an algorithm called **PageRank** (famous for being Google's original algorithm). It looks at the links between pages.
+*   If Page A links to Page B, it's like a "vote" for Page B.
+*   If a really popular page votes for Page B, that vote counts more.
+*   The Ranker calculates a score for every page based on these votes.
+
+### 4. The Search
+When you search for "Python":
+1.  The engine looks in the **Index** to find all pages containing "Python".
+2.  It uses the **Ranker's** scores to sort them, so the most authoritative pages come first.
+
+## Advanced Usage
+
+You can customize where the crawler starts (seeds) and how aggressively it crawls.
+
+```python
+# Crawl a specific domain (e.g., only Python docs)
+custom_seeds = ["https://docs.python.org/3/"]
+
+engine.build_db(
+    start_urls=custom_seeds,
+    max_pages=100,      # Crawl more pages
+    max_workers=10      # Use 10 threads for faster crawling
+)
+```
 
 ## License
 

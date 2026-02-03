@@ -1,6 +1,7 @@
 from .crawler import Crawler
 from .indexer import Indexer
 from .ranker import Ranker
+from .seeds import DEFAULT_SEEDS
 import re
 
 class SearchEngine:
@@ -10,8 +11,19 @@ class SearchEngine:
         self.ranker = None
         self.crawled_data = {}
 
-    def build_db(self, start_urls, max_pages=50):
-        self.crawler = Crawler(start_urls, max_pages)
+    def build_db(self, start_urls=None, max_pages=50, max_workers=5):
+        """
+        Builds the search engine database by crawling, indexing, and ranking.
+
+        Args:
+            start_urls (list): List of URLs to start crawling from. If None, uses default seeds.
+            max_pages (int): Maximum number of pages to crawl.
+            max_workers (int): Number of parallel crawl threads.
+        """
+        if start_urls is None:
+            start_urls = DEFAULT_SEEDS
+
+        self.crawler = Crawler(start_urls, max_pages=max_pages, max_workers=max_workers)
         self.crawled_data = self.crawler.crawl()
 
         self.indexer = Indexer(self.crawled_data)
@@ -28,8 +40,7 @@ class SearchEngine:
         print(f"Searching for: {query}")
         query_tokens = re.findall(r'\b\w+\b', query.lower())
 
-        # Find docs containing ANY of the terms (OR search)
-        # Better: AND search
+        # AND search
         matching_doc_ids = set()
         first_term = True
 
@@ -42,7 +53,6 @@ class SearchEngine:
                 else:
                     matching_doc_ids = matching_doc_ids.intersection(doc_ids)
             else:
-                # If a term is not found in AND search, result is empty
                 matching_doc_ids = set()
                 break
 
@@ -56,14 +66,8 @@ class SearchEngine:
             results.append({
                 'title': data['title'],
                 'link': url,
-                'snippet': data['content'][:200] + "...", # Simple snippet
+                'snippet': data['content'][:200] + "...",
                 'score': score
             })
 
         return results
-
-# Convenience function similar to previous library
-def google_search(query, num_results=10):
-    # This is a placeholder as this engine usually requires a build step.
-    # But to satisfy the interface, we could instantiate and throw an error or usage hint.
-    raise NotImplementedError("This is a local search engine. Instantiate SearchEngine, call build_db(seed_urls), then search().")
