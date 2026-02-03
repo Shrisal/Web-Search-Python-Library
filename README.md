@@ -61,16 +61,15 @@ When you search for "Python":
 
 ## Advanced Usage
 
-You can customize where the crawler starts (seeds) and how aggressively it crawls.
+You can customize where the crawler starts (seeds), how aggressively it crawls, and how long it runs.
 
 ```python
-# Crawl a specific domain (e.g., only Python docs)
-custom_seeds = ["https://docs.python.org/3/"]
-
+# Customize crawling behavior
 engine.build_db(
-    start_urls=custom_seeds,
-    max_pages=100,      # Crawl more pages
-    max_workers=10      # Use 10 threads for faster crawling
+    start_urls=["https://en.wikipedia.org/wiki/Python_(programming_language)"],
+    max_pages=100,      # Stop after 100 pages
+    max_workers=10,     # Use 10 parallel threads for faster crawling
+    timeout=60          # OR stop after 60 seconds, whichever comes first
 )
 ```
 

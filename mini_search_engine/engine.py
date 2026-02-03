@@ -11,7 +11,7 @@ class SearchEngine:
         self.ranker = None
         self.crawled_data = {}
 
-    def build_db(self, start_urls=None, max_pages=50, max_workers=5):
+    def build_db(self, start_urls=None, max_pages=50, max_workers=5, timeout=None):
         """
         Builds the search engine database by crawling, indexing, and ranking.
 
@@ -19,11 +19,12 @@ class SearchEngine:
             start_urls (list): List of URLs to start crawling from. If None, uses default seeds.
             max_pages (int): Maximum number of pages to crawl.
             max_workers (int): Number of parallel crawl threads.
+            timeout (int): Maximum time in seconds to crawl.
         """
         if start_urls is None:
             start_urls = DEFAULT_SEEDS
 
-        self.crawler = Crawler(start_urls, max_pages=max_pages, max_workers=max_workers)
+        self.crawler = Crawler(start_urls, max_pages=max_pages, max_workers=max_workers, timeout=timeout)
         self.crawled_data = self.crawler.crawl()
 
         self.indexer = Indexer(self.crawled_data)

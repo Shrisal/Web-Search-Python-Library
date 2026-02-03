@@ -6,10 +6,12 @@ import concurrent.futures
 import threading
 
 class Crawler:
-    def __init__(self, start_urls, max_pages=50, max_workers=5):
+    def __init__(self, start_urls, max_pages=50, max_workers=5, timeout=None):
         self.start_urls = start_urls
         self.max_pages = max_pages
         self.max_workers = max_workers
+        self.timeout = timeout
+        self.start_time = None
 
         # Thread-safe structures
         self.visited = set()
@@ -29,7 +31,11 @@ class Crawler:
 
     def _should_stop(self):
         with self.lock:
-            return len(self.visited) >= self.max_pages
+            if len(self.visited) >= self.max_pages:
+                return True
+            if self.timeout and (time.time() - self.start_time > self.timeout):
+                return True
+            return False
 
     def _add_to_queue(self, urls):
         with self.lock:
@@ -44,9 +50,11 @@ class Crawler:
             return self.queue.pop(0)
 
     def _crawl_page(self, url):
+        if self._should_stop():
+            return
+
         print(f"Crawling: {url}")
         try:
-            # Polite delay (per thread, simplistic)
             time.sleep(0.5)
 
             response = requests.get(url, timeout=5)
@@ -72,7 +80,6 @@ class Crawler:
                     clean_url = full_url.split('#')[0]
                     outbound_links.append(clean_url)
 
-            # Save data (thread-safe)
             with self.lock:
                 self.crawled_data[url] = {
                     'title': title,
@@ -80,20 +87,21 @@ class Crawler:
                     'links': outbound_links
                 }
 
-            # Add new links to queue
             self._add_to_queue(outbound_links)
 
         except Exception as e:
             print(f"Failed to crawl {url}: {e}")
 
     def crawl(self):
+        self.start_time = time.time()
         print(f"Starting parallel crawl with {self.max_workers} workers...")
+        if self.timeout:
+            print(f"Time limit set to {self.timeout} seconds.")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = []
 
             while not self._should_stop():
-                # If queue is empty but workers are busy, wait a bit
                 url = self._get_next_url()
 
                 if url:
@@ -103,15 +111,11 @@ class Crawler:
                     future = executor.submit(self._crawl_page, url)
                     futures.append(future)
                 else:
-                    # No URLs in queue currently.
-                    # If no futures running, we are done.
-                    # If futures running, wait for them to potentially produce links.
                     running = [f for f in futures if not f.done()]
                     if not running:
                         break
                     time.sleep(0.1)
 
-            # Wait for all submitted tasks to complete
             concurrent.futures.wait(futures)
 
         print(f"Crawl complete. Visited {len(self.visited)} pages.")
