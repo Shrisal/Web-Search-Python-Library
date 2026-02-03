@@ -41,7 +41,7 @@ for i, res in enumerate(results):
 ## How It Works (Simplified)
 
 ### 1. The Crawler (The "Spider")
-Imagine sending out 5 little robots (threads) to different websites. They read the page, save the text, and find all the links to other pages. They add those new links to a queue, and the robots go visit them next. This continues until they have visited `max_pages`.
+Imagine sending out 10 little robots (threads) to different websites. They read the page, save the text, and find all the links to other pages. They add those new links to a queue, and the robots go visit them next. This continues until they have visited `max_pages`.
 
 ### 2. The Indexer (The "Book")
 Once the robots return, the Indexer reads all the text. It creates a massive list (like the index at the back of a textbook) that maps every word to the pages it appears on.
@@ -61,17 +61,21 @@ When you search for "Python":
 
 ## Advanced Usage
 
-You can customize where the crawler starts (seeds), how aggressively it crawls, and how long it runs.
+You can customize where the crawler starts (seeds), how fast it crawls (threads), and how long it runs.
 
 ```python
 # Customize crawling behavior
 engine.build_db(
     start_urls=["https://en.wikipedia.org/wiki/Python_(programming_language)"],
     max_pages=100,      # Stop after 100 pages
-    max_workers=10,     # Use 10 parallel threads for faster crawling
+    max_workers=20,     # Use 20 parallel threads for super fast crawling!
     timeout=60          # OR stop after 60 seconds, whichever comes first
 )
 ```
+
+### Tips for Speed
+- Increase `max_workers` to crawl more sites at once (e.g., 50).
+- Be careful! Crawling too fast might get you blocked by some websites.
 
 ## License
 

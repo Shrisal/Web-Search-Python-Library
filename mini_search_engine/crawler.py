@@ -55,7 +55,8 @@ class Crawler:
 
         print(f"Crawling: {url}")
         try:
-            time.sleep(0.5)
+            # Faster crawl: Reduced sleep time from 0.5s to 0.1s
+            time.sleep(0.1)
 
             response = requests.get(url, timeout=5)
             if response.status_code != 200:
