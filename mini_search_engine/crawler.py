@@ -152,7 +152,16 @@ class Crawler:
         # SSL Context Fix for Windows/Cert Issues
         ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-        connector = aiohttp.TCPConnector(limit=100, ssl=ssl_context)
+        # Force ThreadedResolver to bypass aiodns/c-ares issues on Windows
+        resolver = aiohttp.ThreadedResolver()
+
+        connector = aiohttp.TCPConnector(
+            limit=100,
+            ssl=ssl_context,
+            resolver=resolver,
+            family=0 # AF_UNSPEC (default), but ThreadedResolver handles it well
+        )
+
         async with aiohttp.ClientSession(
             timeout=timeout,
             connector=connector,
