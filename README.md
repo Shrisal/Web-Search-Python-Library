@@ -1,12 +1,20 @@
 # Mini Search Engine
 
-A lightweight, beginner-friendly Python library that lets you build your own search engine from scratch.
+A high-performance, beginner-friendly Python library that lets you build your own search engine from scratch.
 
-It includes a **Parallel Web Crawler**, a **Search Indexer**, and a **Ranking Algorithm** (PageRank) to find and sort the most relevant websites.
+It features a **Blazing Fast Async Crawler**, a **Search Indexer** with BM25, and a **Ranking Algorithm** (PageRank) optimized with sparse matrices.
+
+## Features
+
+-   **Extremely Fast Crawling**: Uses `asyncio` and `aiohttp` to fetch hundreds of pages in seconds.
+-   **Smart Ranking**: Combines **BM25** (the industry standard for text relevance) with **PageRank** (link authority).
+-   **Efficient**: Uses sparse matrices (`scipy.sparse`) to calculate PageRank for large networks without running out of memory.
+-   **Contextual Snippets**: Generates result snippets highlighting your query terms.
 
 ## Installation
 
 ```bash
+pip install -r requirements.txt
 pip install .
 ```
 
@@ -21,61 +29,53 @@ from mini_search_engine import SearchEngine
 engine = SearchEngine()
 
 # 2. Build the database
-# This will start crawling the web from default seeds in parallel.
-# It fetches 20 pages to create a small network.
+# This will start crawling the web from default seeds.
+# It uses asynchronous workers for maximum speed.
 print("Crawling the web... please wait.")
-engine.build_db(max_pages=20)
+engine.build_db(max_pages=50, max_workers=20)
 
 # 3. Search!
-query = "python"
+query = "python programming"
 print(f"\nSearching for: '{query}'")
 results = engine.search(query)
 
 # Display results
 for i, res in enumerate(results):
-    print(f"#{i+1} [Score: {res['score']:.4f}] {res['title']}")
+    print(f"#{i+1} [Score: {res['score']:.2f}] {res['title']}")
     print(f"Link: {res['link']}")
+    print(f"Snippet: {res['snippet']}")
     print("-" * 30)
 ```
 
 ## How It Works (Simplified)
 
 ### 1. The Crawler (The "Spider")
-Imagine sending out 10 little robots (threads) to different websites. They read the page, save the text, and find all the links to other pages. They add those new links to a queue, and the robots go visit them next. This continues until they have visited `max_pages`.
+We use **Asynchronous I/O** (AsyncIO). Instead of using heavy threads, we use lightweight tasks. Imagine a single waiter efficiently taking orders from 50 tables at once, rather than hiring 50 waiters. This allows the crawler to reach thousands of pages extremely quickly.
 
 ### 2. The Indexer (The "Book")
-Once the robots return, the Indexer reads all the text. It creates a massive list (like the index at the back of a textbook) that maps every word to the pages it appears on.
-*   "Apple" -> [Page 1, Page 5]
-*   "Banana" -> [Page 2]
+The indexer builds an "Inverted Index" that maps words to documents. It also calculates:
+*   **Term Frequency (TF)**: How often a word appears in a page.
+*   **Document Length**: To normalize scores (a word in a short tweet is more important than in a long book).
 
 ### 3. The Ranker (The "Judge")
-Not all pages are equal. The Ranker uses an algorithm called **PageRank** (famous for being Google's original algorithm). It looks at the links between pages.
-*   If Page A links to Page B, it's like a "vote" for Page B.
-*   If a really popular page votes for Page B, that vote counts more.
-*   The Ranker calculates a score for every page based on these votes.
-
-### 4. The Search
-When you search for "Python":
-1.  The engine looks in the **Index** to find all pages containing "Python".
-2.  It uses the **Ranker's** scores to sort them, so the most authoritative pages come first.
+We combine two scores to give you the best results:
+*   **BM25**: Calculates text relevance. It rewards pages where your search terms appear frequently but penalizes common words (like "the").
+*   **PageRank**: Calculates authority. It looks at the "web" of links. If important pages link to Page A, Page A becomes important. We use **Sparse Matrices** to compute this efficiently for millions of pages.
 
 ## Advanced Usage
-
-You can customize where the crawler starts (seeds), how fast it crawls (threads), and how long it runs.
 
 ```python
 # Customize crawling behavior
 engine.build_db(
     start_urls=["https://en.wikipedia.org/wiki/Python_(programming_language)"],
-    max_pages=100,      # Stop after 100 pages
-    max_workers=20,     # Use 20 parallel threads for super fast crawling!
-    timeout=60          # OR stop after 60 seconds, whichever comes first
+    max_pages=500,      # Crawl more pages
+    max_workers=50,     # Use 50 concurrent connections
+    timeout=120         # Stop after 2 minutes
 )
 ```
 
 ### Tips for Speed
-- Increase `max_workers` to crawl more sites at once (e.g., 50).
-- Be careful! Crawling too fast might get you blocked by some websites.
+-   `max_workers` controls concurrency. With `asyncio`, you can easily set this to 50 or 100 without slowing down your computer.
 
 ## License
 

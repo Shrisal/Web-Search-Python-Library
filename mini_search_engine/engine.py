@@ -10,6 +10,11 @@ class SearchEngine:
         self.indexer = None
         self.ranker = None
         self.crawled_data = {}
+        self.inverted_index = {}
+        self.doc_map = {}
+        self.reverse_doc_map = {}
+        self.doc_lengths = {}
+        self.avgdl = 0
 
     def build_db(self, start_urls=None, max_pages=50, max_workers=10, timeout=None):
         """
@@ -28,10 +33,16 @@ class SearchEngine:
         self.crawled_data = self.crawler.crawl()
 
         self.indexer = Indexer(self.crawled_data)
-        self.inverted_index, self.doc_map = self.indexer.build_index()
+        self.inverted_index, self.doc_map, self.doc_lengths, self.avgdl = self.indexer.build_index()
         self.reverse_doc_map = self.indexer.reverse_doc_map
 
-        self.ranker = Ranker(self.crawled_data, self.doc_map)
+        self.ranker = Ranker(
+            self.crawled_data,
+            self.doc_map,
+            self.inverted_index,
+            self.doc_lengths,
+            self.avgdl
+        )
         self.ranker.compute_pagerank()
 
     def search(self, query):
@@ -39,26 +50,10 @@ class SearchEngine:
             raise Exception("Search engine not built. Call build_db() first.")
 
         print(f"Searching for: {query}")
-        query_tokens = re.findall(r'\b\w+\b', query.lower())
+        query_tokens = re.findall(r'\b[a-z0-9]+\b', query.lower())
 
-        # AND search
-        matching_doc_ids = set()
-        first_term = True
-
-        for token in query_tokens:
-            if token in self.inverted_index:
-                doc_ids = set(self.inverted_index[token])
-                if first_term:
-                    matching_doc_ids = doc_ids
-                    first_term = False
-                else:
-                    matching_doc_ids = matching_doc_ids.intersection(doc_ids)
-            else:
-                matching_doc_ids = set()
-                break
-
-        # Rank the results
-        ranked_scores = self.ranker.score_results(list(matching_doc_ids))
+        # Rank the results (BM25 + PageRank)
+        ranked_scores = self.ranker.score(query_tokens)
 
         results = []
         for doc_id, score in ranked_scores:
@@ -67,8 +62,36 @@ class SearchEngine:
             results.append({
                 'title': data['title'],
                 'link': url,
-                'snippet': data['content'][:200] + "...",
-                'score': score
+                'snippet': self._generate_snippet(data['content'], query_tokens),
+                'score': float(score) # Ensure standard float
             })
 
         return results
+
+    def _generate_snippet(self, content, query_tokens):
+        lower_content = content.lower()
+        best_pos = -1
+
+        # Simple: find first occurrence of any term
+        # A better approach would be to find the window with max terms
+        for token in query_tokens:
+            pos = lower_content.find(token)
+            if pos != -1:
+                # If we haven't found a position yet, or this one is earlier (or we want some logic)
+                # Actually, earlier is good for top context.
+                if best_pos == -1 or pos < best_pos:
+                    best_pos = pos
+
+        if best_pos == -1:
+            return content[:200] + "..." if len(content) > 200 else content
+
+        start = max(0, best_pos - 60)
+        end = min(len(content), best_pos + 140)
+
+        snippet = content[start:end]
+        if start > 0:
+            snippet = "..." + snippet
+        if end < len(content):
+            snippet = snippet + "..."
+
+        return snippet

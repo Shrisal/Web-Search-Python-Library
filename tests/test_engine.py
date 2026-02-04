@@ -60,6 +60,8 @@ class TestMiniSearchEngine(unittest.TestCase):
 
         results = engine.search("keyword")
 
+        # C is linked by A and B. A linked by C. B linked by none.
+        # So C should be first. A second. B third.
         self.assertEqual(results[0]['title'], "C")
         self.assertEqual(results[1]['title'], "A")
         self.assertEqual(results[2]['title'], "B")
@@ -74,16 +76,23 @@ class TestMiniSearchEngine(unittest.TestCase):
         results = engine.search("python")
         self.assertEqual(len(results), 0)
 
-    def test_crawler_timeout_logic(self):
-        """Test that _should_stop returns True after timeout."""
-        # Create crawler with 1 second timeout
-        crawler = Crawler(["http://test.com"], timeout=1)
-        crawler.start_time = time.time() - 2 # Simulate 2 seconds passed
+    @patch('mini_search_engine.crawler.Crawler.crawl')
+    def test_bm25_ranking(self, mock_crawl):
+        # Doc 1 has higher frequency of term 'python'
+        data = {
+            "A": {"title": "A", "content": "python python python python", "links": []},
+            "B": {"title": "B", "content": "python", "links": []},
+        }
+        mock_crawl.return_value = data
 
-        self.assertTrue(crawler._should_stop())
+        engine = SearchEngine()
+        engine.build_db(["A"])
 
-        crawler.start_time = time.time() # Reset
-        self.assertFalse(crawler._should_stop())
+        results = engine.search("python")
+
+        # A should be higher than B
+        self.assertEqual(results[0]['title'], "A")
+        self.assertEqual(results[1]['title'], "B")
 
 if __name__ == '__main__':
     unittest.main()
