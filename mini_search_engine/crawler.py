@@ -5,6 +5,8 @@ from urllib.parse import urljoin, urlparse
 import time
 import logging
 import sys
+import ssl
+import certifi
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +127,31 @@ class Crawler:
 
         timeout = aiohttp.ClientTimeout(total=10)
         connector = aiohttp.TCPConnector(limit=100)
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+
+        # SSL Context Fix for Windows/Cert Issues
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+
+        # trust_env=True is crucial for picking up system proxies/certificates if needed
+        async with aiohttp.ClientSession(
+            timeout=timeout,
+            connector=connector,
+            trust_env=True,
+            connector_owner=True
+        ) as session:
+            # We can't set ssl_context globally on session if we use a specific connector,
+            # but we can set it on the connector if we created it.
+            # However, aiohttp.TCPConnector takes ssl_context as 'ssl' argument.
+
+            # Re-create connector with explicit SSL context
+            await session.close() # Close the previous one if any (context manager hasn't really started logic yet)
+
+        # Re-doing the context manager properly
+        connector = aiohttp.TCPConnector(limit=100, ssl=ssl_context)
+        async with aiohttp.ClientSession(
+            timeout=timeout,
+            connector=connector,
+            trust_env=True
+        ) as session:
             self.session = session
 
             workers = [asyncio.create_task(self._worker()) for _ in range(self.max_workers)]

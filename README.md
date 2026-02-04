@@ -10,13 +10,28 @@ It features a **Blazing Fast Async Crawler**, a **Search Indexer** with BM25, an
 -   **Smart Ranking**: Combines **BM25** (the industry standard for text relevance) with **PageRank** (link authority).
 -   **Efficient**: Uses sparse matrices (`scipy.sparse`) to calculate PageRank for large networks without running out of memory.
 -   **Contextual Snippets**: Generates result snippets highlighting your query terms.
+-   **Cross-Platform**: Optimized for Windows, Mac, and Linux.
 
 ## Installation
 
-```bash
-pip install -r requirements.txt
-pip install .
-```
+### Method 1: Installing in PyCharm (Directly from GitHub)
+1.  Open PyCharm.
+2.  Go to **File > New Project** (or open your existing project).
+3.  Open the **Terminal** tab (usually at the bottom).
+4.  Run the following command:
+    ```bash
+    pip install git+https://github.com/your-username/mini-search-engine.git
+    ```
+    *(Replace `your-username/mini-search-engine.git` with the actual URL of this repository).*
+
+### Method 2: Manual Installation
+1.  Clone this repository or download the ZIP.
+2.  Open a terminal in the folder.
+3.  Run:
+    ```bash
+    pip install -r requirements.txt
+    pip install .
+    ```
 
 ## Quick Start
 
@@ -83,7 +98,7 @@ engine.build_db(
 ### No results found / Crawler seems stuck?
 1.  **Check Internet**: Ensure you have an active internet connection.
 2.  **Enable Logging**: Add `logging.basicConfig(level=logging.INFO)` to your script to see if pages are being visited.
-3.  **Windows Users**: The library automatically handles Windows-specific `asyncio` loop policies. If you still have issues, ensure your firewall allows Python to access the network.
+3.  **Windows Users**: The library automatically handles Windows-specific `asyncio` loop policies and SSL certificates. If you still have issues, ensure your firewall allows Python to access the network.
 
 ## License
 
