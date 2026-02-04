@@ -2,14 +2,15 @@ from setuptools import setup, find_packages
 
 setup(
     name="mini_search_engine",
-    version="0.1.0",
-    description="A simple search engine library with Crawling, Indexing, and PageRank.",
+    version="0.2.0",
+    description="A simple search engine library scraping Google and DuckDuckGo.",
     author="Jules",
     packages=find_packages(),
     install_requires=[
         "requests",
         "beautifulsoup4",
-        "numpy"
+        "lxml",
+        "certifi"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
