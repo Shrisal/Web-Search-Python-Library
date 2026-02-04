@@ -1,109 +1,266 @@
-from .crawler import Crawler
-from .indexer import Indexer
-from .ranker import Ranker
-from .seeds import DEFAULT_SEEDS
-import re
+import requests
+from bs4 import BeautifulSoup
 import logging
+import time
+import random
+import urllib.parse
 
-# Configure logger but don't force basicConfig
+# Configure logger
 logger = logging.getLogger(__name__)
 
 class SearchEngine:
     def __init__(self):
-        self.crawler = None
-        self.indexer = None
-        self.ranker = None
-        self.crawled_data = {}
-        self.inverted_index = {}
-        self.doc_map = {}
-        self.reverse_doc_map = {}
-        self.doc_lengths = {}
-        self.avgdl = 0
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        })
 
     def build_db(self, start_urls=None, max_pages=50, max_workers=10, timeout=None):
         """
-        Builds the search engine database by crawling, indexing, and ranking.
+        Deprecated: This method is no longer needed as the search engine
+        now queries the web directly. Kept for compatibility.
+        """
+        print("Note: build_db() is deprecated and does nothing. The engine searches the live web now.")
+        logger.warning("build_db() called but is deprecated.")
+
+    def search(self, query, engine="auto", limit=10, safe="moderate", time_range=None):
+        """
+        Searches the web for the query with extensive control.
 
         Args:
-            start_urls (list): List of URLs to start crawling from. If None, uses default seeds.
-            max_pages (int): Maximum number of pages to crawl.
-            max_workers (int): Number of parallel crawl threads. Default increased to 10 for speed.
-            timeout (int): Maximum time in seconds to crawl.
+            query (str): The search query.
+            engine (str): 'google', 'ddg', or 'auto'. Defaults to 'auto'.
+                          If the specified engine fails, it will attempt the other one.
+            limit (int): Approximate number of results to return. Defaults to 10.
+            safe (str): Safe search level. 'strict', 'moderate', or 'off'.
+                        Defaults to 'moderate'.
+            time_range (str): 'd' (day), 'w' (week), 'm' (month), 'y' (year).
+                              Defaults to None (any time).
+
+        Returns:
+            list: A list of result dictionaries.
         """
-        if start_urls is None:
-            start_urls = DEFAULT_SEEDS
+        print(f"Searching for: '{query}' (Engine: {engine}, Limit: {limit}, Safe: {safe}, Time: {time_range})")
 
-        self.crawler = Crawler(start_urls, max_pages=max_pages, max_workers=max_workers, timeout=timeout)
-        self.crawled_data = self.crawler.crawl()
+        # Determine execution order
+        engines_to_try = []
+        if engine.lower() == 'google':
+            engines_to_try = ['google', 'ddg']
+        elif engine.lower() == 'ddg' or engine.lower() == 'duckduckgo':
+            engines_to_try = ['ddg', 'google']
+        else:
+            engines_to_try = ['google', 'ddg'] # Default preference
 
-        if not self.crawled_data:
-            print("WARNING: No pages were crawled! The search engine will be empty.")
-            print("Possible fixes:")
-            print("1. Check your internet connection.")
-            print("2. If on Windows, ensure your firewall permits Python.")
-            print("3. Try simpler start_urls.")
-            logger.warning("Crawl returned empty data.")
+        for eng in engines_to_try:
+            results = []
+            if eng == 'google':
+                results = self._search_google(query, limit, safe, time_range)
+            elif eng == 'ddg':
+                results = self._search_duckduckgo(query, limit, safe, time_range)
 
-        self.indexer = Indexer(self.crawled_data)
-        self.inverted_index, self.doc_map, self.doc_lengths, self.avgdl = self.indexer.build_index()
-        self.reverse_doc_map = self.indexer.reverse_doc_map
+            if results:
+                return results[:limit]
 
-        self.ranker = Ranker(
-            self.crawled_data,
-            self.doc_map,
-            self.inverted_index,
-            self.doc_lengths,
-            self.avgdl
-        )
-        self.ranker.compute_pagerank()
+            print(f"{eng.capitalize()} returned no results or failed. Trying next available engine...")
 
-    def search(self, query):
-        if not self.indexer:
-            raise Exception("Search engine not built. Call build_db() first.")
+        print("All engines failed to return results.")
+        return []
 
-        print(f"Searching for: {query}")
-        query_tokens = re.findall(r'\b[a-z0-9]+\b', query.lower())
-
-        # Rank the results (BM25 + PageRank)
-        ranked_scores = self.ranker.score(query_tokens)
-
+    def _search_google(self, query, limit, safe, time_range):
+        base_url = "https://www.google.com/search"
         results = []
-        for doc_id, score in ranked_scores:
-            url = self.reverse_doc_map[doc_id]
-            data = self.crawled_data[url]
-            results.append({
-                'title': data['title'],
-                'link': url,
-                'snippet': self._generate_snippet(data['content'], query_tokens),
-                'score': float(score) # Ensure standard float
-            })
+        start = 0
+
+        # Map parameters
+        params = {
+            "q": query,
+            "hl": "en"
+        }
+
+        # Safe Search
+        if safe == 'strict':
+            params['safe'] = 'active'
+        elif safe == 'off':
+            params['safe'] = 'images' # 'off' isn't explicitly 'off' in url, but omitting often defaults to moderate. 'images' is a trick or just omit.
+            # Actually, omitting 'safe' is usually moderate. explicit 'safe=active' is strict.
+            # To turn OFF, sometimes 'safe=off' works or 'safe=undefined'.
+            # We'll just omit it for 'off' and 'moderate', and use 'active' for strict.
+            if 'safe' in params: del params['safe']
+
+        # Time Range
+        if time_range:
+            # Map d, w, m, y to qdr:d, qdr:w, etc.
+            tr_map = {'d': 'd', 'w': 'w', 'm': 'm', 'y': 'y'}
+            if time_range in tr_map:
+                params['tbs'] = f"qdr:{tr_map[time_range]}"
+
+        while len(results) < limit:
+            # Use a copy of params to avoid mutation issues in mocks/retries
+            current_params = params.copy()
+            current_params['start'] = start
+
+            try:
+                # Add random delay if paging
+                if start > 0:
+                    time.sleep(random.uniform(1.0, 2.5))
+
+                response = self.session.get(base_url, params=current_params, timeout=10)
+                response.raise_for_status()
+
+                if "systems have detected unusual traffic" in response.text or "recaptcha" in response.text.lower():
+                    logger.warning("Google blocked the request.")
+                    break
+
+                soup = BeautifulSoup(response.text, "lxml")
+                current_page_results = []
+
+                for g in soup.select("div.g"):
+                    title_elem = g.select_one("h3")
+                    link_elem = g.select_one("a")
+
+                    if title_elem and link_elem:
+                        title = title_elem.get_text()
+                        link = link_elem["href"]
+
+                        if "/url?q=" in link:
+                            link = link.split("/url?q=")[1].split("&")[0]
+
+                        snippet = "No snippet"
+                        snippet_div = g.select_one("div.VwiC3b, div.IsZvec, span.aCOpRe")
+                        if snippet_div:
+                            snippet = snippet_div.get_text()
+
+                        res = {
+                            "title": title,
+                            "link": link,
+                            "snippet": snippet,
+                            "score": 1.0,
+                            "source": "google"
+                        }
+                        current_page_results.append(res)
+                        results.append(res)
+
+                        if len(results) >= limit:
+                            break
+
+                if not current_page_results:
+                    # No more results on this page
+                    break
+
+                start += 10
+
+            except Exception as e:
+                logger.error(f"Google search failed: {e}")
+                break
 
         return results
 
-    def _generate_snippet(self, content, query_tokens):
-        lower_content = content.lower()
-        best_pos = -1
+    def _search_duckduckgo(self, query, limit, safe, time_range):
+        url = "https://html.duckduckgo.com/html/"
+        results = []
 
-        # Simple: find first occurrence of any term
-        # A better approach would be to find the window with max terms
-        for token in query_tokens:
-            pos = lower_content.find(token)
-            if pos != -1:
-                # If we haven't found a position yet, or this one is earlier (or we want some logic)
-                # Actually, earlier is good for top context.
-                if best_pos == -1 or pos < best_pos:
-                    best_pos = pos
+        # Initial Params
+        data = {
+            "q": query,
+            "kl": "us-en" # Default region
+        }
 
-        if best_pos == -1:
-            return content[:200] + "..." if len(content) > 200 else content
+        # Safe Search
+        # kp: -2 (strict), -1 (off), 1 (moderate)?
+        # Checking online: kp=-2 is strict, kp=-1 is off. kp=1 is moderate.
+        if safe == 'strict':
+            data['kp'] = '-2'
+        elif safe == 'off':
+            data['kp'] = '-1'
+        else:
+            data['kp'] = '1' # moderate
 
-        start = max(0, best_pos - 60)
-        end = min(len(content), best_pos + 140)
+        # Time Range
+        if time_range:
+            tr_map = {'d': 'd', 'w': 'w', 'm': 'm', 'y': 'y'}
+            if time_range in tr_map:
+                data['df'] = tr_map[time_range]
 
-        snippet = content[start:end]
-        if start > 0:
-            snippet = "..." + snippet
-        if end < len(content):
-            snippet = snippet + "..."
+        while len(results) < limit:
+            try:
+                # Add random delay if paging
+                if len(results) > 0:
+                    time.sleep(random.uniform(0.5, 1.5))
 
-        return snippet
+                response = self.session.post(url, data=data, timeout=10)
+                response.raise_for_status()
+
+                soup = BeautifulSoup(response.text, "html.parser")
+                current_page_results = []
+
+                # Parse Results
+                for result in soup.select(".result"):
+                    if "result--ad" in result.get("class", []):
+                        continue
+
+                    title_elem = result.select_one(".result__a")
+                    snippet_elem = result.select_one(".result__snippet")
+
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                        raw_link = title_elem["href"]
+                        link = raw_link
+
+                        # Decode DDG redirection
+                        if "uddg=" in raw_link:
+                            try:
+                                parsed = urllib.parse.urlparse(raw_link)
+                                qs = urllib.parse.parse_qs(parsed.query)
+                                if 'uddg' in qs:
+                                    link = qs['uddg'][0]
+                            except Exception:
+                                pass
+
+                        snippet = snippet_elem.get_text(strip=True) if snippet_elem else "No snippet"
+
+                        res = {
+                            "title": title,
+                            "link": link,
+                            "snippet": snippet,
+                            "score": 1.0,
+                            "source": "duckduckgo"
+                        }
+                        current_page_results.append(res)
+                        results.append(res)
+
+                        if len(results) >= limit:
+                            break
+
+                if not current_page_results:
+                    break
+
+                # Check for limit
+                if len(results) >= limit:
+                    break
+
+                # Pagination: Find the "Next" form
+                # Usually a form with action="/html/" and input value="Next"
+                next_form = None
+                for form in soup.select("form[action='/html/']"):
+                    if form.select_one("input[value='Next']"):
+                        next_form = form
+                        break
+
+                if next_form:
+                    # Extract inputs for the next request
+                    new_data = {}
+                    for inp in next_form.select("input"):
+                        name = inp.get("name")
+                        value = inp.get("value")
+                        if name:
+                            new_data[name] = value
+                    data = new_data
+                else:
+                    # No next page
+                    break
+
+            except Exception as e:
+                logger.error(f"DuckDuckGo search failed: {e}")
+                break
+
+        return results
