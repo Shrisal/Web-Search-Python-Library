@@ -1,109 +1,124 @@
-from .crawler import Crawler
-from .indexer import Indexer
-from .ranker import Ranker
-from .seeds import DEFAULT_SEEDS
-import re
+import requests
+from bs4 import BeautifulSoup
 import logging
+import time
+import random
 
-# Configure logger but don't force basicConfig
+# Configure logger
 logger = logging.getLogger(__name__)
 
 class SearchEngine:
     def __init__(self):
-        self.crawler = None
-        self.indexer = None
-        self.ranker = None
-        self.crawled_data = {}
-        self.inverted_index = {}
-        self.doc_map = {}
-        self.reverse_doc_map = {}
-        self.doc_lengths = {}
-        self.avgdl = 0
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        })
 
     def build_db(self, start_urls=None, max_pages=50, max_workers=10, timeout=None):
         """
-        Builds the search engine database by crawling, indexing, and ranking.
-
-        Args:
-            start_urls (list): List of URLs to start crawling from. If None, uses default seeds.
-            max_pages (int): Maximum number of pages to crawl.
-            max_workers (int): Number of parallel crawl threads. Default increased to 10 for speed.
-            timeout (int): Maximum time in seconds to crawl.
+        Deprecated: This method is no longer needed as the search engine
+        now queries the web directly. Kept for compatibility.
         """
-        if start_urls is None:
-            start_urls = DEFAULT_SEEDS
-
-        self.crawler = Crawler(start_urls, max_pages=max_pages, max_workers=max_workers, timeout=timeout)
-        self.crawled_data = self.crawler.crawl()
-
-        if not self.crawled_data:
-            print("WARNING: No pages were crawled! The search engine will be empty.")
-            print("Possible fixes:")
-            print("1. Check your internet connection.")
-            print("2. If on Windows, ensure your firewall permits Python.")
-            print("3. Try simpler start_urls.")
-            logger.warning("Crawl returned empty data.")
-
-        self.indexer = Indexer(self.crawled_data)
-        self.inverted_index, self.doc_map, self.doc_lengths, self.avgdl = self.indexer.build_index()
-        self.reverse_doc_map = self.indexer.reverse_doc_map
-
-        self.ranker = Ranker(
-            self.crawled_data,
-            self.doc_map,
-            self.inverted_index,
-            self.doc_lengths,
-            self.avgdl
-        )
-        self.ranker.compute_pagerank()
+        print("Note: build_db() is deprecated and does nothing. The engine searches the live web now.")
+        logger.warning("build_db() called but is deprecated.")
 
     def search(self, query):
-        if not self.indexer:
-            raise Exception("Search engine not built. Call build_db() first.")
-
+        """
+        Searches the web for the query. Attempts Google first, then falls back to DuckDuckGo.
+        """
         print(f"Searching for: {query}")
-        query_tokens = re.findall(r'\b[a-z0-9]+\b', query.lower())
 
-        # Rank the results (BM25 + PageRank)
-        ranked_scores = self.ranker.score(query_tokens)
+        # specific handling for the "google.com" requirement
+        results = self._search_google(query)
 
-        results = []
-        for doc_id, score in ranked_scores:
-            url = self.reverse_doc_map[doc_id]
-            data = self.crawled_data[url]
-            results.append({
-                'title': data['title'],
-                'link': url,
-                'snippet': self._generate_snippet(data['content'], query_tokens),
-                'score': float(score) # Ensure standard float
-            })
+        if not results:
+            print("Google search yielded no results (likely blocked), falling back to DuckDuckGo...")
+            results = self._search_duckduckgo(query)
 
         return results
 
-    def _generate_snippet(self, content, query_tokens):
-        lower_content = content.lower()
-        best_pos = -1
+    def _search_google(self, query):
+        url = "https://www.google.com/search"
+        params = {"q": query}
 
-        # Simple: find first occurrence of any term
-        # A better approach would be to find the window with max terms
-        for token in query_tokens:
-            pos = lower_content.find(token)
-            if pos != -1:
-                # If we haven't found a position yet, or this one is earlier (or we want some logic)
-                # Actually, earlier is good for top context.
-                if best_pos == -1 or pos < best_pos:
-                    best_pos = pos
+        # Try to look like a real browser
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+        }
 
-        if best_pos == -1:
-            return content[:200] + "..." if len(content) > 200 else content
+        try:
+            response = self.session.get(url, params=params, headers=headers, timeout=10)
+            response.raise_for_status()
 
-        start = max(0, best_pos - 60)
-        end = min(len(content), best_pos + 140)
+            if "systems have detected unusual traffic" in response.text or "recaptcha" in response.text.lower():
+                logger.warning("Google blocked the request.")
+                return []
 
-        snippet = content[start:end]
-        if start > 0:
-            snippet = "..." + snippet
-        if end < len(content):
-            snippet = snippet + "..."
+            soup = BeautifulSoup(response.text, "lxml")
+            results = []
 
-        return snippet
+            for g in soup.select("div.g"):
+                title_elem = g.select_one("h3")
+                link_elem = g.select_one("a")
+
+                if title_elem and link_elem:
+                    title = title_elem.get_text()
+                    link = link_elem["href"]
+
+                    if "/url?q=" in link:
+                        link = link.split("/url?q=")[1].split("&")[0]
+
+                    snippet = "No snippet"
+                    snippet_div = g.select_one("div.VwiC3b, div.IsZvec, span.aCOpRe")
+                    if snippet_div:
+                        snippet = snippet_div.get_text()
+
+                    results.append({
+                        "title": title,
+                        "link": link,
+                        "snippet": snippet,
+                        "score": 1.0 # Placeholder score
+                    })
+            return results
+
+        except Exception as e:
+            logger.error(f"Google search failed: {e}")
+            return []
+
+    def _search_duckduckgo(self, query):
+        url = "https://html.duckduckgo.com/html/"
+        params = {"q": query}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+             "Referer": "https://html.duckduckgo.com/"
+        }
+
+        try:
+            response = self.session.post(url, data=params, headers=headers, timeout=10)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            results = []
+
+            for result in soup.select(".result"):
+                title_elem = result.select_one(".result__a")
+                snippet_elem = result.select_one(".result__snippet")
+
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                    link = title_elem["href"]
+                    snippet = snippet_elem.get_text(strip=True) if snippet_elem else "No snippet"
+
+                    results.append({
+                        "title": title,
+                        "link": link,
+                        "snippet": snippet,
+                        "score": 1.0
+                    })
+            return results
+
+        except Exception as e:
+            logger.error(f"DuckDuckGo search failed: {e}")
+            return []
