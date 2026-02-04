@@ -2,97 +2,124 @@ import unittest
 from unittest.mock import patch, Mock
 import os
 import sys
-import time
 
 # Add the parent directory to the path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from mini_search_engine.engine import SearchEngine
-from mini_search_engine.crawler import Crawler
 
 class TestMiniSearchEngine(unittest.TestCase):
 
     def setUp(self):
-        self.mock_crawled_data = {
-            "http://test.com/a": {
-                "title": "Page A",
-                "content": "This is page A. It talks about Python.",
-                "links": ["http://test.com/b"]
-            },
-            "http://test.com/b": {
-                "title": "Page B",
-                "content": "This is page B. It talks about Java.",
-                "links": ["http://test.com/a", "http://test.com/c"]
-            },
-            "http://test.com/c": {
-                "title": "Page C",
-                "content": "This is page C. It is very authoritative on Python.",
-                "links": ["http://test.com/a"]
-            }
-        }
+        self.engine = SearchEngine()
 
-    @patch('mini_search_engine.crawler.Crawler.crawl')
-    def test_search_engine_logic(self, mock_crawl):
-        mock_crawl.return_value = self.mock_crawled_data
+    @patch('mini_search_engine.engine.requests.Session.get')
+    def test_search_google_basic(self, mock_get):
+        # Mock Google response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = """
+        <html><body>
+            <div class="g">
+                <h3>Google Result</h3>
+                <a href="/url?q=http://google.com/res">Link</a>
+                <div class="VwiC3b">Snippet</div>
+            </div>
+        </body></html>
+        """
+        mock_get.return_value = mock_response
 
-        engine = SearchEngine()
-        engine.build_db(["http://test.com/a"])
+        # Set limit=1 to avoid looping endlessly with the same mock response
+        results = self.engine.search("test", engine="google", limit=1)
 
-        results = engine.search("python")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['source'], "google")
 
-        self.assertEqual(len(results), 2)
-        titles = [r['title'] for r in results]
-        self.assertIn("Page A", titles)
-        self.assertIn("Page C", titles)
-        self.assertNotIn("Page B", titles)
+        # Verify params
+        args, kwargs = mock_get.call_args
+        self.assertEqual(kwargs['params']['q'], "test")
 
-    @patch('mini_search_engine.crawler.Crawler.crawl')
-    def test_pagerank_ranking(self, mock_crawl):
-        data = {
-            "A": {"title": "A", "content": "keyword", "links": ["C"]},
-            "B": {"title": "B", "content": "keyword", "links": ["C"]},
-            "C": {"title": "C", "content": "keyword", "links": ["A"]},
-        }
-        mock_crawl.return_value = data
+    @patch('mini_search_engine.engine.requests.Session.post')
+    def test_search_ddg_basic(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = """
+        <html><body>
+            <div class="result">
+                <a class="result__a" href="//duckduckgo.com/l/?uddg=http://ddg.com/res">DDG Result</a>
+                <div class="result__snippet">Snippet</div>
+            </div>
+        </body></html>
+        """
+        mock_post.return_value = mock_response
 
-        engine = SearchEngine()
-        engine.build_db(["A"])
+        results = self.engine.search("test", engine="ddg")
 
-        results = engine.search("keyword")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['source'], "duckduckgo")
+        self.assertEqual(results[0]['link'], "http://ddg.com/res")
 
-        # C is linked by A and B. A linked by C. B linked by none.
-        # So C should be first. A second. B third.
-        self.assertEqual(results[0]['title'], "C")
-        self.assertEqual(results[1]['title'], "A")
-        self.assertEqual(results[2]['title'], "B")
+    @patch('mini_search_engine.engine.requests.Session.get')
+    @patch('mini_search_engine.engine.requests.Session.post')
+    def test_fallback_logic(self, mock_post, mock_get):
+        # Google fails (blocked)
+        mock_google = Mock()
+        mock_google.status_code = 200
+        mock_google.text = "systems have detected unusual traffic"
+        mock_get.return_value = mock_google
 
-    @patch('mini_search_engine.crawler.Crawler.crawl')
-    def test_empty_crawl(self, mock_crawl):
-        mock_crawl.return_value = {}
+        # DDG succeeds
+        mock_ddg = Mock()
+        mock_ddg.status_code = 200
+        mock_ddg.text = """
+        <html><body>
+            <div class="result">
+                <a class="result__a" href="http://res.com">Res</a>
+            </div>
+        </body></html>
+        """
+        mock_post.return_value = mock_ddg
 
-        engine = SearchEngine()
-        engine.build_db(["http://test.com"])
+        # Request 'auto' (defaults to Google -> DDG)
+        results = self.engine.search("test", engine="auto")
 
-        results = engine.search("python")
-        self.assertEqual(len(results), 0)
+        self.assertTrue(mock_get.called)
+        self.assertTrue(mock_post.called)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['source'], "duckduckgo")
 
-    @patch('mini_search_engine.crawler.Crawler.crawl')
-    def test_bm25_ranking(self, mock_crawl):
-        # Doc 1 has higher frequency of term 'python'
-        data = {
-            "A": {"title": "A", "content": "python python python python", "links": []},
-            "B": {"title": "B", "content": "python", "links": []},
-        }
-        mock_crawl.return_value = data
+    @patch('mini_search_engine.engine.requests.Session.get')
+    def test_google_pagination_and_limit(self, mock_get):
+        # Mock 2 pages
+        page1 = Mock()
+        page1.status_code = 200
+        page1.text = """
+        <div class="g"><h3>R1</h3><a href="l1">L</a></div>
+        <div class="g"><h3>R2</h3><a href="l2">L</a></div>
+        """
 
-        engine = SearchEngine()
-        engine.build_db(["A"])
+        page2 = Mock()
+        page2.status_code = 200
+        page2.text = """
+        <div class="g"><h3>R3</h3><a href="l3">L</a></div>
+        """
 
-        results = engine.search("python")
+        mock_get.side_effect = [page1, page2]
 
-        # A should be higher than B
-        self.assertEqual(results[0]['title'], "A")
-        self.assertEqual(results[1]['title'], "B")
+        # Limit 3 results
+        results = self.engine.search("test", engine="google", limit=3)
+
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[0]['title'], "R1")
+        self.assertEqual(results[2]['title'], "R3")
+
+        # Verify calls
+        self.assertEqual(mock_get.call_count, 2)
+        # Check start params
+        args1, kwargs1 = mock_get.call_args_list[0]
+        self.assertEqual(kwargs1['params']['start'], 0)
+        args2, kwargs2 = mock_get.call_args_list[1]
+        self.assertEqual(kwargs2['params']['start'], 10)
 
 if __name__ == '__main__':
     unittest.main()
