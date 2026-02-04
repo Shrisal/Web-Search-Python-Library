@@ -3,6 +3,10 @@ from .indexer import Indexer
 from .ranker import Ranker
 from .seeds import DEFAULT_SEEDS
 import re
+import logging
+
+# Configure logger but don't force basicConfig
+logger = logging.getLogger(__name__)
 
 class SearchEngine:
     def __init__(self):
@@ -31,6 +35,14 @@ class SearchEngine:
 
         self.crawler = Crawler(start_urls, max_pages=max_pages, max_workers=max_workers, timeout=timeout)
         self.crawled_data = self.crawler.crawl()
+
+        if not self.crawled_data:
+            print("WARNING: No pages were crawled! The search engine will be empty.")
+            print("Possible fixes:")
+            print("1. Check your internet connection.")
+            print("2. If on Windows, ensure your firewall permits Python.")
+            print("3. Try simpler start_urls.")
+            logger.warning("Crawl returned empty data.")
 
         self.indexer = Indexer(self.crawled_data)
         self.inverted_index, self.doc_map, self.doc_lengths, self.avgdl = self.indexer.build_index()

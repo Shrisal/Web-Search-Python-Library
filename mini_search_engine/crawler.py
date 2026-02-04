@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import time
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,10 @@ class Crawler:
         Synchronous entry point for the crawler.
         """
         try:
+            # Fix for Windows asyncio loop with aiohttp
+            if sys.platform == 'win32':
+                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
             return asyncio.run(self._run_crawl())
         except Exception as e:
             logger.error(f"Crawl failed: {e}")

@@ -24,6 +24,10 @@ You can build a search engine in just 3 lines of code! By default, it starts cra
 
 ```python
 from mini_search_engine import SearchEngine
+import logging
+
+# Optional: Enable logging to see the crawler in action!
+logging.basicConfig(level=logging.INFO)
 
 # 1. Initialize the engine
 engine = SearchEngine()
@@ -74,8 +78,12 @@ engine.build_db(
 )
 ```
 
-### Tips for Speed
--   `max_workers` controls concurrency. With `asyncio`, you can easily set this to 50 or 100 without slowing down your computer.
+## Troubleshooting
+
+### No results found / Crawler seems stuck?
+1.  **Check Internet**: Ensure you have an active internet connection.
+2.  **Enable Logging**: Add `logging.basicConfig(level=logging.INFO)` to your script to see if pages are being visited.
+3.  **Windows Users**: The library automatically handles Windows-specific `asyncio` loop policies. If you still have issues, ensure your firewall allows Python to access the network.
 
 ## License
 
