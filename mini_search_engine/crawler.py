@@ -27,12 +27,31 @@ class Crawler:
         try:
             async with self.session.get(url, timeout=5) as response:
                 if response.status != 200:
+                    logger.warning(f"Failed to fetch {url}: Status {response.status}")
                     return None
                 if 'text/html' not in response.headers.get('Content-Type', ''):
+                    logger.info(f"Skipping {url}: Not HTML")
                     return None
                 return await response.text()
+        except aiohttp.ClientConnectorError as e:
+            msg = f"Connection Error fetching {url}: {e}"
+            logger.error(msg)
+            print(f"[ERROR] {msg}") # Force print to console for visibility
+            return None
+        except asyncio.TimeoutError:
+            msg = f"Timeout fetching {url}"
+            logger.error(msg)
+            print(f"[ERROR] {msg}")
+            return None
+        except ssl.SSLError as e:
+            msg = f"SSL Error fetching {url}: {e}"
+            logger.error(msg)
+            print(f"[ERROR] {msg}")
+            return None
         except Exception as e:
-            logger.debug(f"Failed to fetch {url}: {e}")
+            msg = f"Unexpected Error fetching {url}: {e}"
+            logger.error(msg)
+            print(f"[ERROR] {msg}")
             return None
 
     def _parse(self, html, url):
@@ -61,7 +80,9 @@ class Crawler:
                 'links': outbound_links
             }
         except Exception as e:
-            logger.error(f"Error parsing {url}: {e}")
+            msg = f"Error parsing {url}: {e}"
+            logger.error(msg)
+            print(f"[ERROR] {msg}")
             return None
 
     async def _worker(self):
@@ -110,6 +131,7 @@ class Crawler:
 
             except Exception as e:
                 logger.error(f"Worker exception: {e}")
+                print(f"[ERROR] Worker exception: {e}")
                 try:
                     self.queue.task_done()
                 except ValueError:
@@ -126,26 +148,10 @@ class Crawler:
             self.queue.put_nowait(url)
 
         timeout = aiohttp.ClientTimeout(total=10)
-        connector = aiohttp.TCPConnector(limit=100)
 
         # SSL Context Fix for Windows/Cert Issues
         ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-        # trust_env=True is crucial for picking up system proxies/certificates if needed
-        async with aiohttp.ClientSession(
-            timeout=timeout,
-            connector=connector,
-            trust_env=True,
-            connector_owner=True
-        ) as session:
-            # We can't set ssl_context globally on session if we use a specific connector,
-            # but we can set it on the connector if we created it.
-            # However, aiohttp.TCPConnector takes ssl_context as 'ssl' argument.
-
-            # Re-create connector with explicit SSL context
-            await session.close() # Close the previous one if any (context manager hasn't really started logic yet)
-
-        # Re-doing the context manager properly
         connector = aiohttp.TCPConnector(limit=100, ssl=ssl_context)
         async with aiohttp.ClientSession(
             timeout=timeout,
@@ -209,4 +215,5 @@ class Crawler:
             return asyncio.run(self._run_crawl())
         except Exception as e:
             logger.error(f"Crawl failed: {e}")
+            print(f"[CRITICAL ERROR] Crawl failed: {e}")
             return {}
