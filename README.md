@@ -73,3 +73,7 @@ for i, res in enumerate(results):
 ## License
 
 MIT License
+
+## Credits
+
+This library was developed with extensive assistance from the Jules AI coding assistant.
