@@ -11,9 +11,8 @@ setup(
     description="A simple search engine library scraping Google and DuckDuckGo.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/mini-search-engine",
-    author="Jules",
-    author_email="jules@example.com",
+    url="https://github.com/Shrisal/Web-Search-Python-Library",
+    author="Shriyan Salapakkam and Jules",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
@@ -37,7 +36,7 @@ setup(
         "certifi"
     ],
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/mini-search-engine/issues",
-        "Source": "https://github.com/yourusername/mini-search-engine",
+        "Bug Reports": "https://github.com/Shrisal/Web-Search-Python-Library/issues",
+        "Source": "https://github.com/Shrisal/Web-Search-Python-Library",
     },
 )
