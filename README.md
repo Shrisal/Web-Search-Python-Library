@@ -19,13 +19,6 @@ You can install the package directly from PyPI:
 pip install mini-search-engine
 ```
 
-Or install locally from source:
-
-```bash
-git clone https://github.com/yourusername/mini-search-engine.git
-cd mini-search-engine
-pip install .
-```
 
 ## Usage
 
