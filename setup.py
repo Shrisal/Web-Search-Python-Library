@@ -7,7 +7,7 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="mini_search_engine",
-    version="1.0.0",
+    version="1.0.1",
     description="A simple search engine library scraping Google and DuckDuckGo.",
     long_description=long_description,
     long_description_content_type="text/markdown",
